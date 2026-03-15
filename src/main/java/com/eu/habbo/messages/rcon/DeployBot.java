@@ -1,0 +1,122 @@
+package com.eu.habbo.messages.rcon;
+
+import com.eu.habbo.Emulator;
+import com.eu.habbo.habbohotel.bots.Bot;
+import com.eu.habbo.habbohotel.rooms.*;
+import com.eu.habbo.messages.outgoing.rooms.users.RoomUserStatusComposer;
+import com.eu.habbo.messages.outgoing.rooms.users.RoomUsersComposer;
+import com.google.gson.Gson;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.sql.*;
+
+public class DeployBot extends RCONMessage<DeployBot.JSON> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DeployBot.class);
+
+    public DeployBot() {
+        super(JSON.class);
+    }
+
+    @Override
+    public void handle(Gson gson, JSON json) {
+        try {
+            Room room = Emulator.getGameEnvironment().getRoomManager().loadRoom(json.room_id);
+            if (room == null) {
+                this.status = ROOM_NOT_FOUND;
+                this.message = "Room " + json.room_id + " not found";
+                return;
+            }
+
+            // Insert bot into DB
+            int botId;
+            try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                 PreparedStatement stmt = connection.prepareStatement(
+                         "INSERT INTO bots (user_id, room_id, name, motto, figure, gender, x, y, z, rot, type, freeroam, chat_auto, chat_random, chat_delay) " +
+                         "VALUES (0, ?, ?, ?, ?, ?, ?, ?, 0.0, 2, 'generic', '1', '0', '0', 10)",
+                         Statement.RETURN_GENERATED_KEYS)) {
+
+                stmt.setInt(1, json.room_id);
+                stmt.setString(2, json.name);
+                stmt.setString(3, json.motto != null ? json.motto : "");
+                stmt.setString(4, json.figure != null ? json.figure : "hd-180-1.ch-210-66.lg-270-110.sh-300-91");
+                stmt.setString(5, json.gender != null ? json.gender.toUpperCase() : "M");
+                stmt.setInt(6, json.x);
+                stmt.setInt(7, json.y);
+                stmt.execute();
+
+                try (ResultSet keys = stmt.getGeneratedKeys()) {
+                    if (!keys.next()) {
+                        this.status = STATUS_ERROR;
+                        this.message = "Failed to insert bot into database";
+                        return;
+                    }
+                    botId = keys.getInt(1);
+                }
+            }
+
+            // Load bot from DB and inject into loaded room
+            Bot bot;
+            try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                 PreparedStatement stmt = connection.prepareStatement(
+                         "SELECT b.*, COALESCE(u.username, 'agent') AS owner_name FROM bots b " +
+                         "LEFT JOIN users u ON b.user_id = u.id WHERE b.id = ? LIMIT 1")) {
+
+                stmt.setInt(1, botId);
+                try (ResultSet set = stmt.executeQuery()) {
+                    if (!set.next()) {
+                        this.status = STATUS_ERROR;
+                        this.message = "Could not reload bot from database";
+                        return;
+                    }
+                    bot = Emulator.getGameEnvironment().getBotManager().loadBot(set);
+                }
+            }
+
+            if (bot == null) {
+                this.status = STATUS_ERROR;
+                this.message = "Failed to load bot instance";
+                return;
+            }
+
+            // Set up room unit and inject into the live room
+            RoomTile tile = room.getLayout().getTile((short) json.x, (short) json.y);
+            if (tile == null) tile = room.getLayout().getDoorTile();
+
+            RoomUnit roomUnit = new RoomUnit();
+            roomUnit.setRotation(RoomUserRotation.SOUTH);
+            roomUnit.setLocation(tile);
+            double stackHeight = tile.getStackHeight();
+            roomUnit.setPreviousLocationZ(stackHeight);
+            roomUnit.setZ(stackHeight);
+            roomUnit.setPathFinderRoom(room);
+            roomUnit.setRoomUnitType(RoomUnitType.BOT);
+            roomUnit.setCanWalk(room.isAllowBotsWalk());
+
+            bot.setRoomUnit(roomUnit);
+            bot.setRoom(room);
+            bot.setCanWalk(true);
+            bot.needsUpdate(false);
+
+            room.addBot(bot);
+            Emulator.getThreading().run(bot);
+            room.sendComposer(new RoomUsersComposer(bot).compose());
+            room.sendComposer(new RoomUserStatusComposer(bot.getRoomUnit()).compose());
+
+            this.message = String.valueOf(botId);
+        } catch (Exception e) {
+            this.status = STATUS_ERROR;
+            LOGGER.error("Caught exception in DeployBot RCON", e);
+        }
+    }
+
+    static class JSON {
+        public int room_id;
+        public String name;
+        public String figure;
+        public String gender = "M";
+        public String motto = "";
+        public int x = 0;
+        public int y = 0;
+    }
+}
