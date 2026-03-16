@@ -23,6 +23,7 @@ public class Outgoing {
     public final static int FriendsComposer = 3130;
     public final static int StalkErrorComposer = 3048;
     public final static int TradeCloseWindowComposer = 1001;
+    public final static int AiModalSettingsComposer = 31991;
     public final static int RemoveFloorItemComposer = 2703;
     public final static int InventoryPetsComposer = 3522;
     public final static int UserCreditsComposer = 3475;

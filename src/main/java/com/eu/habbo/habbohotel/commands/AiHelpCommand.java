@@ -11,7 +11,7 @@ import com.eu.habbo.habbohotel.gameclients.GameClient;
 public class AiHelpCommand extends Command {
 
     public AiHelpCommand() {
-        super(null, new String[]{"ai"});
+        super("cmd_setup_agent", new String[]{"ai"});
     }
 
     @Override
@@ -29,7 +29,7 @@ public class AiHelpCommand extends Command {
             sb.append("  Link your AI provider API key. Provider defaults to 'openai'.\n");
             sb.append("  Example: :set_ai_key sk-... openai\n\n");
 
-            sb.append(":setup_agent <name> [type:<figure_type>] <persona...>\n");
+            sb.append(":setup_agent <name> [type:<figure_type>] [x:<tile_x> y:<tile_y>] <persona...>\n");
             sb.append("  Spawn an AI bot in your room with the given name and persona.\n");
             sb.append("  Figure types: default, citizen, agent, bouncer, m-employee\n");
             sb.append("  Example: :setup_agent Aria type:agent A friendly assistant who loves Habbo\n\n");
@@ -37,6 +37,13 @@ public class AiHelpCommand extends Command {
             sb.append(":remove_agent <name|all>\n");
             sb.append("  Remove one of your AI bots in the current room, or remove all of them.\n");
             sb.append("  Example: :remove_agent Aria\n\n");
+
+            sb.append(":ai_duet <bot_a> <bot_b> [turns:<2-20>] <topic...>\n");
+            sb.append("  Start a turn-based conversation between two of your AI bots.\n");
+            sb.append("  Example: :ai_duet Bob Bas turns:8 Have a conversation about mice\n\n");
+
+            sb.append(":ai_stop\n");
+            sb.append("  Stop your active bot-to-bot conversation in this room.\n\n");
         }
 
         sb.append("=== Talking to an agent ===\n");

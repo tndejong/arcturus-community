@@ -294,6 +294,7 @@ public class PacketManager {
     }
 
     private void registerUsers() throws Exception {
+        this.registerHandler(Incoming.AiModalGetSettingsEvent, AiModalGetSettingsEvent.class);
         this.registerHandler(Incoming.RequestUserDataEvent, RequestUserDataEvent.class);
         this.registerHandler(Incoming.RequestUserCreditsEvent, RequestUserCreditsEvent.class);
         this.registerHandler(Incoming.RequestUserClubEvent, RequestUserClubEvent.class);

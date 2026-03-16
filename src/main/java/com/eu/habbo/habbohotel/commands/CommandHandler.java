@@ -301,6 +301,8 @@ public class CommandHandler {
         addCommand(new SetAiApiKeyCommand());
         addCommand(new SetupAgentCommand());
         addCommand(new RemoveAgentCommand());
+        addCommand(new AiDuetCommand());
+        addCommand(new AiStopCommand());
     }
 
     public List<Command> getCommandsForRank(int rankId) {

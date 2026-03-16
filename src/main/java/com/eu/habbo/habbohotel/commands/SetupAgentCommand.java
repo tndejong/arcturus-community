@@ -17,7 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * :setup_agent <name> [type:<figure_type>] <persona...>
+ * :setup_agent <name> [type:<figure_type>] [x:<tile_x> y:<tile_y>] <persona...>
  *
  * Creates an AiBot in the player's current room, adjacent to the player.
  * The bot persona is the joined remaining params after the name.
@@ -45,10 +45,11 @@ public class SetupAgentCommand extends Command {
     @Override
     public boolean handle(GameClient gameClient, String[] params) throws Exception {
         if (params.length < 3) {
-            gameClient.getHabbo().alert("Usage: :setup_agent <name> [type:<figure_type>] <persona description...>\n" +
+            gameClient.getHabbo().alert("Usage: :setup_agent <name> [type:<figure_type>] [x:<tile_x> y:<tile_y>] <persona description...>\n" +
                     "Examples:\n" +
                     "  :setup_agent Aria A helpful and friendly assistant\n" +
                     "  :setup_agent Aria type:agent A helpful and friendly assistant\n" +
+                    "  :setup_agent Aria type:agent x:12 y:8 A helpful and friendly assistant\n" +
                     "Available figure types: " + listFigureTypes());
             return false;
         }
@@ -62,22 +63,60 @@ public class SetupAgentCommand extends Command {
         String botName = params[1];
         String figureType = DEFAULT_FIGURE_TYPE;
         String figure = DEFAULT_FIGURE;
+        Integer spawnX = null;
+        Integer spawnY = null;
+
         int personaStartIndex = 2;
 
-        if (params.length >= 4 && isFigureTypeToken(params[2])) {
-            figureType = extractFigureType(params[2]);
-            String resolved = resolveFigureByType(figureType);
-            if (resolved == null) {
-                gameClient.getHabbo().alert("Unknown figure_type '" + figureType + "'. Available: " + listFigureTypes());
-                return false;
+        while (personaStartIndex < params.length) {
+            String token = params[personaStartIndex];
+
+            if (isFigureTypeToken(token)) {
+                figureType = extractFigureType(token);
+                String resolved = resolveFigureByType(figureType);
+                if (resolved == null) {
+                    gameClient.getHabbo().alert("Unknown figure_type '" + figureType + "'. Available: " + listFigureTypes());
+                    return false;
+                }
+                figure = resolved;
+                personaStartIndex++;
+                continue;
             }
-            figure = resolved;
-            personaStartIndex = 3;
+
+            if (isSpawnXToken(token)) {
+                Integer value = parseSpawnCoordinate(extractSpawnValue(token));
+                if (value == null) {
+                    gameClient.getHabbo().alert("Invalid x coordinate. Use x:<0-" + Short.MAX_VALUE + ">.");
+                    return false;
+                }
+                spawnX = value;
+                personaStartIndex++;
+                continue;
+            }
+
+            if (isSpawnYToken(token)) {
+                Integer value = parseSpawnCoordinate(extractSpawnValue(token));
+                if (value == null) {
+                    gameClient.getHabbo().alert("Invalid y coordinate. Use y:<0-" + Short.MAX_VALUE + ">.");
+                    return false;
+                }
+                spawnY = value;
+                personaStartIndex++;
+                continue;
+            }
+
+            break;
+        }
+
+        if ((spawnX == null) != (spawnY == null)) {
+            gameClient.getHabbo().alert("When setting custom spawn, provide both x and y.\n" +
+                    "Example: :setup_agent Aria x:12 y:8 Helpful assistant");
+            return false;
         }
 
         if (params.length <= personaStartIndex) {
             gameClient.getHabbo().alert("You must provide a persona.\n" +
-                    "Usage: :setup_agent <name> [type:<figure_type>] <persona description...>");
+                    "Usage: :setup_agent <name> [type:<figure_type>] [x:<tile_x> y:<tile_y>] <persona description...>");
             return false;
         }
 
@@ -96,8 +135,19 @@ public class SetupAgentCommand extends Command {
             return false;
         }
 
-        // Prefer spawning on the tile the user is facing (useful for chairs), then fallback to adjacent tiles.
-        RoomTile spawnTile = findPreferredSpawnTile(room, gameClient.getHabbo().getRoomUnit());
+        RoomTile spawnTile;
+        if (spawnX != null) {
+            RoomTile requestedTile = room.getLayout().getTile(spawnX.shortValue(), spawnY.shortValue());
+            if (!isValidSpawnTile(room, requestedTile)) {
+                gameClient.getHabbo().alert("Custom spawn tile (" + spawnX + ", " + spawnY + ") is invalid or occupied.");
+                return false;
+            }
+            spawnTile = requestedTile;
+        } else {
+            // Prefer spawning on the tile the user is facing (useful for chairs), then fallback to adjacent tiles.
+            spawnTile = findPreferredSpawnTile(room, gameClient.getHabbo().getRoomUnit());
+        }
+
         if (spawnTile == null) {
             gameClient.getHabbo().alert("No free tile found to place the agent bot. Clear some space first.");
             return false;
@@ -137,6 +187,30 @@ public class SetupAgentCommand extends Command {
 
     private String extractFigureType(String token) {
         return token.substring("type:".length()).trim().toLowerCase();
+    }
+
+    private boolean isSpawnXToken(String token) {
+        return token != null && token.toLowerCase().startsWith("x:");
+    }
+
+    private boolean isSpawnYToken(String token) {
+        return token != null && token.toLowerCase().startsWith("y:");
+    }
+
+    private String extractSpawnValue(String token) {
+        return token.substring(2).trim();
+    }
+
+    private Integer parseSpawnCoordinate(String value) {
+        if (value == null || value.isEmpty()) return null;
+
+        try {
+            int parsed = Integer.parseInt(value);
+            if (parsed < 0 || parsed > Short.MAX_VALUE) return null;
+            return parsed;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private String resolveFigureByType(String type) {

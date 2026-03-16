@@ -353,6 +353,8 @@ public class Incoming {
     public static final int ChangeChatBubbleEvent = 1030;
     public static final int LoveLockStartConfirmEvent = 3775;
 
+    public static final int AiModalGetSettingsEvent = 31990;
+
     public static final int HotelViewRequestLTDAvailabilityEvent = 410;
     public static final int HotelViewRequestSecondsUntilEvent = 271;
 
