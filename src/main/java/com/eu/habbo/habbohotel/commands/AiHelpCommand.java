@@ -1,7 +1,6 @@
 package com.eu.habbo.habbohotel.commands;
 
 import com.eu.habbo.habbohotel.gameclients.GameClient;
-import com.eu.habbo.habbohotel.permissions.Permission;
 
 /**
  * :ai
@@ -12,7 +11,7 @@ import com.eu.habbo.habbohotel.permissions.Permission;
 public class AiHelpCommand extends Command {
 
     public AiHelpCommand() {
-        super("cmd_ai_help", new String[]{"ai"});
+        super(null, new String[]{"ai"});
     }
 
     @Override
@@ -34,6 +33,10 @@ public class AiHelpCommand extends Command {
             sb.append("  Spawn an AI bot in your room with the given name and persona.\n");
             sb.append("  Figure types: default, citizen, agent, bouncer, m-employee\n");
             sb.append("  Example: :setup_agent Aria type:agent A friendly assistant who loves Habbo\n\n");
+
+            sb.append(":remove_agent <name|all>\n");
+            sb.append("  Remove one of your AI bots in the current room, or remove all of them.\n");
+            sb.append("  Example: :remove_agent Aria\n\n");
         }
 
         sb.append("=== Talking to an agent ===\n");
