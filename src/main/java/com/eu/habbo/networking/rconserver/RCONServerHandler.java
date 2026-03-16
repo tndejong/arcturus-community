@@ -21,24 +21,16 @@ public class RCONServerHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
-        String address = "";
-        try {
-            InetSocketAddress remote = (InetSocketAddress) ctx.channel().remoteAddress();
-            InetAddress inetAddress = remote.getAddress();
-            if (inetAddress != null) {
-                address = inetAddress.getHostAddress();
-            }
-        } catch (Exception ignored) {
-            // Keep empty string and reject below.
-        }
+        String address = getRemoteAddress(ctx);
 
         if (isAllowedAddress(address)) {
+            LOGGER.info("RCON Remote connection accepted: {}", address);
             return;
         }
 
         ctx.channel().close();
 
-        LOGGER.warn("RCON Remote connection closed: {}. IP not allowed!", address);
+        LOGGER.warn("RCON Remote connection closed: {}. IP not allowed! Allowed list: {}", address, Emulator.getRconServer().allowedAdresses);
     }
 
     private static boolean isAllowedAddress(String address) {
@@ -124,24 +116,42 @@ public class RCONServerHandler extends ChannelInboundHandlerAdapter {
         byte[] d = new byte[data.readableBytes()];
         data.getBytes(0, d);
         String message = new String(d);
+        String address = getRemoteAddress(ctx);
         Gson gson = new Gson();
         String response = "ERROR";
         String key = "";
         try {
             JsonObject object = gson.fromJson(message, JsonObject.class);
             key = object.get("key").getAsString();
+            LOGGER.info("RCON Received key={} from {}", key, address);
             response = Emulator.getRconServer().handle(ctx, key, object.get("data").toString());
         } catch (ArrayIndexOutOfBoundsException e) {
             LOGGER.error("Unknown RCON Message: {}", key);
         } catch (Exception e) {
-            LOGGER.error("Invalid RCON Message: {}", message);
+            LOGGER.error("Invalid RCON Message from {}: {}", address, message);
             e.printStackTrace();
         }
+
+        LOGGER.info("RCON Responding key={} to {} with {} bytes", key, address, response.getBytes().length);
 
         ChannelFuture f = ctx.channel().write(Unpooled.copiedBuffer(response.getBytes()), ctx.channel().voidPromise());
         ctx.channel().flush();
         ctx.flush();
         f.channel().close();
         data.release();
+    }
+
+    private static String getRemoteAddress(ChannelHandlerContext ctx) {
+        String address = "";
+        try {
+            InetSocketAddress remote = (InetSocketAddress) ctx.channel().remoteAddress();
+            InetAddress inetAddress = remote.getAddress();
+            if (inetAddress != null) {
+                address = inetAddress.getHostAddress();
+            }
+        } catch (Exception ignored) {
+            // Keep empty string and reject/log above.
+        }
+        return address;
     }
 }
