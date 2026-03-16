@@ -28,12 +28,14 @@ public class DeployBot extends RCONMessage<DeployBot.JSON> {
                 return;
             }
 
-            // Insert bot into DB
+            boolean canWalk = json.freeroam;
+            String freeroamVal = canWalk ? "1" : "0";
+
             int botId;
             try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
                  PreparedStatement stmt = connection.prepareStatement(
                          "INSERT INTO bots (user_id, room_id, name, motto, figure, gender, x, y, z, rot, type, freeroam, chat_auto, chat_random, chat_delay) " +
-                         "VALUES (0, ?, ?, ?, ?, ?, ?, ?, 0.0, 2, 'generic', '1', '0', '0', 10)",
+                         "VALUES (0, ?, ?, ?, ?, ?, ?, ?, 0.0, 2, 'generic', ?, '0', '0', 10)",
                          Statement.RETURN_GENERATED_KEYS)) {
 
                 stmt.setInt(1, json.room_id);
@@ -43,6 +45,7 @@ public class DeployBot extends RCONMessage<DeployBot.JSON> {
                 stmt.setString(5, json.gender != null ? json.gender.toUpperCase() : "M");
                 stmt.setInt(6, json.x);
                 stmt.setInt(7, json.y);
+                stmt.setString(8, freeroamVal);
                 stmt.execute();
 
                 try (ResultSet keys = stmt.getGeneratedKeys()) {
@@ -91,11 +94,11 @@ public class DeployBot extends RCONMessage<DeployBot.JSON> {
             roomUnit.setZ(stackHeight);
             roomUnit.setPathFinderRoom(room);
             roomUnit.setRoomUnitType(RoomUnitType.BOT);
-            roomUnit.setCanWalk(room.isAllowBotsWalk());
+            roomUnit.setCanWalk(canWalk);
 
             bot.setRoomUnit(roomUnit);
             bot.setRoom(room);
-            bot.setCanWalk(true);
+            bot.setCanWalk(canWalk);
             bot.needsUpdate(false);
 
             room.addBot(bot);
@@ -118,5 +121,6 @@ public class DeployBot extends RCONMessage<DeployBot.JSON> {
         public String motto = "";
         public int x = 0;
         public int y = 0;
+        public boolean freeroam = false;
     }
 }

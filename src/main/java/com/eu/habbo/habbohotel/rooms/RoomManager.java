@@ -3,6 +3,8 @@ package com.eu.habbo.habbohotel.rooms;
 import com.eu.habbo.Emulator;
 import com.eu.habbo.core.RoomUserPetComposer;
 import com.eu.habbo.habbohotel.achievements.AchievementManager;
+import com.eu.habbo.habbohotel.bots.AgentServiceClient;
+import com.eu.habbo.habbohotel.bots.AiBot;
 import com.eu.habbo.habbohotel.bots.Bot;
 import com.eu.habbo.habbohotel.gameclients.GameClient;
 import com.eu.habbo.habbohotel.games.Game;
@@ -74,6 +76,8 @@ public class RoomManager {
     private final THashMap<Integer, RoomCategory> roomCategories;
     private final List<String> mapNames;
     private final ConcurrentHashMap<Integer, Room> activeRooms;
+    // Tracks rooms whose AI agent sessions have been initialised this server lifecycle.
+    private final Set<Integer> aiRestoredRooms = ConcurrentHashMap.newKeySet();
     private final ArrayList<Class<? extends Game>> gameTypes;
 
     public RoomManager() {
@@ -301,6 +305,11 @@ public class RoomManager {
                 if (room.isPreLoaded() && !room.isLoaded()) {
                     room.loadData();
                 }
+                // Room was already cached (e.g. pre-loaded by navigator) but AI sessions
+                // may not have been initialised yet — run restore once per lifecycle.
+                if (room.isLoaded() && !this.aiRestoredRooms.contains(id)) {
+                    restoreAiAgents(room);
+                }
             }
 
             return room;
@@ -320,6 +329,9 @@ public class RoomManager {
 
             if (room != null) {
                 this.activeRooms.put(room.getId(), room);
+                if (loadData) {
+                    restoreAiAgents(room);
+                }
             }
         } catch (SQLException e) {
             LOGGER.error("Caught SQL exception", e);
@@ -328,6 +340,44 @@ public class RoomManager {
         return room;
     }
 
+    /**
+     * Re-initialises AI sessions for AiBots already loaded into the room by loadData().
+     * loadData() → loadBots() already queries the bots table and adds them to the room,
+     * so this method only needs to call initSession on the AI service — no new DB rows needed.
+     */
+    private void restoreAiAgents(Room room) {
+        // Mark immediately so concurrent calls don't double-init
+        this.aiRestoredRooms.add(room.getId());
+        try (Connection conn = Emulator.getDatabase().getDataSource().getConnection()) {
+            for (Bot bot : room.getCurrentBots().valueCollection()) {
+                if (!(bot instanceof AiBot)) continue;
+
+                final int botId  = bot.getId();
+                final int userId = bot.getOwnerId();
+                final String persona = bot.getMotto();
+
+                try (PreparedStatement stmt = conn.prepareStatement(
+                        "SELECT api_key, provider FROM ai_api_keys WHERE user_id = ? AND verified = 1 LIMIT 1")) {
+                    stmt.setInt(1, userId);
+                    try (ResultSet set = stmt.executeQuery()) {
+                        if (!set.next()) {
+                            LOGGER.warn("No verified API key for AiBot {} owner {}, skipping session init", botId, userId);
+                            continue;
+                        }
+                        final String apiKey   = set.getString("api_key");
+                        final String provider = set.getString("provider");
+
+                        Emulator.getThreading().run(() ->
+                            AgentServiceClient.initSession(botId, userId, persona, apiKey, provider)
+                        );
+                        LOGGER.info("Queued AI session restore for bot {} ({})", botId, bot.getName());
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Failed to restore AI agent sessions for room {}", room.getId(), e);
+        }
+    }
 
     public Room createRoom(int ownerId, String ownerName, String name, String description, String modelName, int usersMax, int categoryId, int tradeType) {
         Room room = null;

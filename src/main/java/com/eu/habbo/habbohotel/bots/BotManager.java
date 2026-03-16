@@ -42,6 +42,7 @@ public class BotManager {
         addBotDefinition("generic", Bot.class);
         addBotDefinition("bartender", ButlerBot.class);
         addBotDefinition("visitor_log", VisitorBot.class);
+        addBotDefinition("ai_agent", AiBot.class);
 
         this.reload();
 

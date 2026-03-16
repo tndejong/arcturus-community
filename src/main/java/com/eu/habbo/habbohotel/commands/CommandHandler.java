@@ -296,6 +296,10 @@ public class CommandHandler {
         addCommand(new SubscriptionCommand());
 
         addCommand(new TestCommand());
+
+        addCommand(new AiHelpCommand());
+        addCommand(new SetAiApiKeyCommand());
+        addCommand(new SetupAgentCommand());
     }
 
     public List<Command> getCommandsForRank(int rankId) {

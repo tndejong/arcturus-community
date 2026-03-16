@@ -485,7 +485,7 @@ public class Room implements Comparable<Room>, ISerialize, Runnable {
                         }
                         b.getRoomUnit().setRoomUnitType(RoomUnitType.BOT);
                         b.getRoomUnit().setDanceType(DanceType.values()[set.getInt("dance")]);
-                        //b.getRoomUnit().setCanWalk(set.getBoolean("freeroam"));
+                        b.getRoomUnit().setCanWalk(set.getString("freeroam").equals("1"));
                         b.getRoomUnit().setInRoom(true);
                         this.giveEffect(b.getRoomUnit(), set.getInt("effect"), Integer.MAX_VALUE);
                         this.addBot(b);
