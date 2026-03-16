@@ -30,9 +30,10 @@ public class AiHelpCommand extends Command {
             sb.append("  Link your AI provider API key. Provider defaults to 'openai'.\n");
             sb.append("  Example: :set_ai_key sk-... openai\n\n");
 
-            sb.append(":setup_agent <name> <persona...>\n");
+            sb.append(":setup_agent <name> [type:<figure_type>] <persona...>\n");
             sb.append("  Spawn an AI bot in your room with the given name and persona.\n");
-            sb.append("  Example: :setup_agent Aria A friendly assistant who loves Habbo\n\n");
+            sb.append("  Figure types: default, citizen, agent, bouncer, m-employee\n");
+            sb.append("  Example: :setup_agent Aria type:agent A friendly assistant who loves Habbo\n\n");
         }
 
         sb.append("=== Talking to an agent ===\n");

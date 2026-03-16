@@ -13,9 +13,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * :setup_agent <name> <persona...>
+ * :setup_agent <name> [type:<figure_type>] <persona...>
  *
  * Creates an AiBot in the player's current room, adjacent to the player.
  * The bot persona is the joined remaining params after the name.
@@ -25,6 +27,16 @@ public class SetupAgentCommand extends Command {
     private static final Logger LOGGER = LoggerFactory.getLogger(SetupAgentCommand.class);
 
     private static final String DEFAULT_FIGURE = "hd-180-1.ch-210-66.lg-270-110.sh-300-91";
+    private static final String DEFAULT_FIGURE_TYPE = "default";
+    private static final Map<String, String> BUILTIN_FIGURE_TYPES = new HashMap<>();
+
+    static {
+        BUILTIN_FIGURE_TYPES.put("default", DEFAULT_FIGURE);
+        BUILTIN_FIGURE_TYPES.put("citizen", "hd-180-1.ch-210-66.lg-270-110.sh-300-91.ha-1012-110.hr-828-61");
+        BUILTIN_FIGURE_TYPES.put("agent", "hd-3095-12.ch-255-64.lg-3235-96.sh-295-91.ha-3426-110.hr-3531-61.he-1601-0.ea-3169-0.fa-1211-1408.cp-3310-0.cc-3007-0.ca-1809-0.wa-2007-0");
+        BUILTIN_FIGURE_TYPES.put("bouncer", "ca-1809.cc-3007-82.ch-255-82.cp-3119-82.ea-3169-62.fa-1211-62.ha-1012-110.hd-3095-1.he-1601-62.hr-828-35.lg-3202-110.sh-290-91.wa-2007");
+        BUILTIN_FIGURE_TYPES.put("m-employee", "cc-3007-62.ch-265-82.ea-1403-62.hd-3095-8.hr-155-61.lg-285-90.sh-300-91.wa-2007");
+    }
 
     public SetupAgentCommand() {
         super("cmd_setup_agent", new String[]{"setup_agent"});
@@ -33,7 +45,11 @@ public class SetupAgentCommand extends Command {
     @Override
     public boolean handle(GameClient gameClient, String[] params) throws Exception {
         if (params.length < 3) {
-            gameClient.getHabbo().alert("Usage: :setup_agent <name> <persona description...>\nExample: :setup_agent Aria A helpful and friendly assistant");
+            gameClient.getHabbo().alert("Usage: :setup_agent <name> [type:<figure_type>] <persona description...>\n" +
+                    "Examples:\n" +
+                    "  :setup_agent Aria A helpful and friendly assistant\n" +
+                    "  :setup_agent Aria type:agent A helpful and friendly assistant\n" +
+                    "Available figure types: " + listFigureTypes());
             return false;
         }
 
@@ -44,9 +60,30 @@ public class SetupAgentCommand extends Command {
         }
 
         String botName = params[1];
+        String figureType = DEFAULT_FIGURE_TYPE;
+        String figure = DEFAULT_FIGURE;
+        int personaStartIndex = 2;
+
+        if (params.length >= 4 && isFigureTypeToken(params[2])) {
+            figureType = extractFigureType(params[2]);
+            String resolved = resolveFigureByType(figureType);
+            if (resolved == null) {
+                gameClient.getHabbo().alert("Unknown figure_type '" + figureType + "'. Available: " + listFigureTypes());
+                return false;
+            }
+            figure = resolved;
+            personaStartIndex = 3;
+        }
+
+        if (params.length <= personaStartIndex) {
+            gameClient.getHabbo().alert("You must provide a persona.\n" +
+                    "Usage: :setup_agent <name> [type:<figure_type>] <persona description...>");
+            return false;
+        }
+
         StringBuilder personaBuilder = new StringBuilder();
-        for (int i = 2; i < params.length; i++) {
-            if (i > 2) personaBuilder.append(" ");
+        for (int i = personaStartIndex; i < params.length; i++) {
+            if (i > personaStartIndex) personaBuilder.append(" ");
             personaBuilder.append(params[i]);
         }
         String persona = personaBuilder.toString();
@@ -67,7 +104,7 @@ public class SetupAgentCommand extends Command {
         }
 
         // Deploy the AiBot using the DeployBot pattern (direct INSERT + loadBot + inject)
-        int botId = insertBot(userId, room.getId(), botName, persona, spawnTile);
+        int botId = insertBot(userId, room.getId(), botName, persona, figure, spawnTile);
         if (botId < 0) {
             gameClient.getHabbo().alert("Failed to create the agent bot. Please try again.");
             return false;
@@ -80,7 +117,7 @@ public class SetupAgentCommand extends Command {
         }
 
         // Persist configuration so it auto-restores on server restart
-        int configId = insertAgentConfig(userId, room.getId(), botName, persona, DEFAULT_FIGURE, spawnTile);
+        int configId = insertAgentConfig(userId, room.getId(), botName, persona, figure, spawnTile);
 
         // Initialise the AI session in habbo-ai-service
         String error = AgentServiceClient.initSession(botId, userId, persona, keyRow.apiKey, keyRow.provider);
@@ -90,8 +127,24 @@ public class SetupAgentCommand extends Command {
             return false;
         }
 
-        gameClient.getHabbo().alert("Agent '" + botName + "' is ready! Talk to it and it will respond.");
+        gameClient.getHabbo().alert("Agent '" + botName + "' is ready! (figure_type: " + figureType + ") Talk to it and it will respond.");
         return true;
+    }
+
+    private boolean isFigureTypeToken(String token) {
+        return token != null && token.toLowerCase().startsWith("type:");
+    }
+
+    private String extractFigureType(String token) {
+        return token.substring("type:".length()).trim().toLowerCase();
+    }
+
+    private String resolveFigureByType(String type) {
+        return BUILTIN_FIGURE_TYPES.get(type.toLowerCase());
+    }
+
+    private String listFigureTypes() {
+        return String.join(", ", BUILTIN_FIGURE_TYPES.keySet());
     }
 
     /** Find the first walkable, unoccupied tile adjacent (N/E/S/W) to the given tile. */
@@ -109,7 +162,7 @@ public class SetupAgentCommand extends Command {
         return null;
     }
 
-    private int insertBot(int userId, int roomId, String name, String motto, RoomTile tile) {
+    private int insertBot(int userId, int roomId, String name, String motto, String figure, RoomTile tile) {
         try (Connection conn = Emulator.getDatabase().getDataSource().getConnection();
              PreparedStatement stmt = conn.prepareStatement(
                      "INSERT INTO bots (user_id, room_id, name, motto, figure, gender, x, y, z, rot, type, freeroam, chat_auto, chat_random, chat_delay) " +
@@ -119,7 +172,7 @@ public class SetupAgentCommand extends Command {
             stmt.setInt(2, roomId);
             stmt.setString(3, name);
             stmt.setString(4, motto);
-            stmt.setString(5, DEFAULT_FIGURE);
+            stmt.setString(5, figure);
             stmt.setInt(6, tile.x);
             stmt.setInt(7, tile.y);
             stmt.execute();
