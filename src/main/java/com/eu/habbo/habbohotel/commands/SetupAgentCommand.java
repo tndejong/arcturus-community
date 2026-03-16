@@ -96,8 +96,8 @@ public class SetupAgentCommand extends Command {
             return false;
         }
 
-        // Find a walkable tile adjacent to the player
-        RoomTile spawnTile = findAdjacentTile(room, gameClient.getHabbo().getRoomUnit().getCurrentLocation());
+        // Prefer spawning on the tile the user is facing (useful for chairs), then fallback to adjacent tiles.
+        RoomTile spawnTile = findPreferredSpawnTile(room, gameClient.getHabbo().getRoomUnit());
         if (spawnTile == null) {
             gameClient.getHabbo().alert("No free tile found to place the agent bot. Clear some space first.");
             return false;
@@ -147,19 +147,60 @@ public class SetupAgentCommand extends Command {
         return String.join(", ", BUILTIN_FIGURE_TYPES.keySet());
     }
 
-    /** Find the first walkable, unoccupied tile adjacent (N/E/S/W) to the given tile. */
+    /** Prefer the tile in front of the user; fallback to nearby valid tiles. */
+    private RoomTile findPreferredSpawnTile(Room room, RoomUnit userRoomUnit) {
+        RoomTile facingTile = getTileInFront(room, userRoomUnit);
+        if (isValidSpawnTile(room, facingTile)) {
+            return facingTile;
+        }
+
+        return findAdjacentTile(room, userRoomUnit.getCurrentLocation());
+    }
+
+    /** Find the first valid, unoccupied tile adjacent (N/E/S/W) to the given tile. */
     private RoomTile findAdjacentTile(Room room, RoomTile origin) {
         int[][] offsets = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
         for (int[] off : offsets) {
             RoomTile candidate = room.getLayout().getTile((short) (origin.x + off[0]), (short) (origin.y + off[1]));
-            if (candidate != null
-                    && candidate.isWalkable()
-                    && !room.hasBotsAt(candidate.x, candidate.y)
-                    && !room.hasHabbosAt(candidate.x, candidate.y)) {
+            if (isValidSpawnTile(room, candidate)) {
                 return candidate;
             }
         }
         return null;
+    }
+
+    /** Tile in front based on current avatar body rotation. */
+    private RoomTile getTileInFront(Room room, RoomUnit userRoomUnit) {
+        RoomTile origin = userRoomUnit.getCurrentLocation();
+        if (origin == null) return null;
+
+        int offsetX = 0;
+        int offsetY = 0;
+        switch (userRoomUnit.getBodyRotation()) {
+            case NORTH: offsetY = -1; break;
+            case NORTH_EAST: offsetX = 1; offsetY = -1; break;
+            case EAST: offsetX = 1; break;
+            case SOUTH_EAST: offsetX = 1; offsetY = 1; break;
+            case SOUTH: offsetY = 1; break;
+            case SOUTH_WEST: offsetX = -1; offsetY = 1; break;
+            case WEST: offsetX = -1; break;
+            case NORTH_WEST: offsetX = -1; offsetY = -1; break;
+            default: break;
+        }
+
+        return room.getLayout().getTile((short) (origin.x + offsetX), (short) (origin.y + offsetY));
+    }
+
+    /**
+     * Spawn is valid on a walkable tile or a chair/sit tile,
+     * as long as the tile is not already occupied by a user or bot.
+     */
+    private boolean isValidSpawnTile(Room room, RoomTile tile) {
+        if (tile == null) return false;
+        boolean walkableOrSeat = tile.isWalkable() || room.canSitAt(tile.x, tile.y);
+        return walkableOrSeat
+                && !room.hasBotsAt(tile.x, tile.y)
+                && !room.hasHabbosAt(tile.x, tile.y);
     }
 
     private int insertBot(int userId, int roomId, String name, String motto, String figure, RoomTile tile) {
