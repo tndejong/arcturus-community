@@ -12,23 +12,109 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+
 public class RCONServerHandler extends ChannelInboundHandlerAdapter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RCONServerHandler.class);
 
     @Override
     public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
-        String adress = ctx.channel().remoteAddress().toString().split(":")[0].replace("/", "");
-
-        for (String s : Emulator.getRconServer().allowedAdresses) {
-            if (s.equalsIgnoreCase(adress)) {
-                return;
+        String address = "";
+        try {
+            InetSocketAddress remote = (InetSocketAddress) ctx.channel().remoteAddress();
+            InetAddress inetAddress = remote.getAddress();
+            if (inetAddress != null) {
+                address = inetAddress.getHostAddress();
             }
+        } catch (Exception ignored) {
+            // Keep empty string and reject below.
+        }
+
+        if (isAllowedAddress(address)) {
+            return;
         }
 
         ctx.channel().close();
 
-        LOGGER.warn("RCON Remote connection closed: {}. IP not allowed!", adress);
+        LOGGER.warn("RCON Remote connection closed: {}. IP not allowed!", address);
+    }
+
+    private static boolean isAllowedAddress(String address) {
+        if (address == null || address.isEmpty()) {
+            return false;
+        }
+
+        for (String rawRule : Emulator.getRconServer().allowedAdresses) {
+            String rule = rawRule == null ? "" : rawRule.trim();
+            if (rule.isEmpty()) {
+                continue;
+            }
+
+            if ("*".equals(rule)) {
+                return true;
+            }
+
+            if (rule.equalsIgnoreCase(address)) {
+                return true;
+            }
+
+            if (rule.contains("/") && matchesIpv4Cidr(address, rule)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean matchesIpv4Cidr(String ip, String cidr) {
+        String[] parts = cidr.split("/", 2);
+        if (parts.length != 2) {
+            return false;
+        }
+
+        Integer ipLong = ipv4ToLong(ip);
+        Integer networkLong = ipv4ToLong(parts[0]);
+        if (ipLong == null || networkLong == null) {
+            return false;
+        }
+
+        int prefix;
+        try {
+            prefix = Integer.parseInt(parts[1]);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+
+        if (prefix < 0 || prefix > 32) {
+            return false;
+        }
+
+        int mask = prefix == 0 ? 0 : (-1 << (32 - prefix));
+        return (ipLong & mask) == (networkLong & mask);
+    }
+
+    private static Integer ipv4ToLong(String ipv4) {
+        String[] octets = ipv4.split("\\.");
+        if (octets.length != 4) {
+            return null;
+        }
+
+        int result = 0;
+        for (String octet : octets) {
+            int value;
+            try {
+                value = Integer.parseInt(octet);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+            if (value < 0 || value > 255) {
+                return null;
+            }
+            result = (result << 8) | value;
+        }
+        return result;
     }
 
     @Override
