@@ -32,29 +32,54 @@ public class DeployBot extends RCONMessage<DeployBot.JSON> {
             String freeroamVal = canWalk ? "1" : "0";
 
             int botId;
-            try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
-                 PreparedStatement stmt = connection.prepareStatement(
-                         "INSERT INTO bots (user_id, room_id, name, motto, figure, gender, x, y, z, rot, type, freeroam, chat_auto, chat_random, chat_delay) " +
-                         "VALUES (0, ?, ?, ?, ?, ?, ?, ?, 0.0, 2, 'generic', ?, '0', '0', 10)",
-                         Statement.RETURN_GENERATED_KEYS)) {
-
-                stmt.setInt(1, json.room_id);
-                stmt.setString(2, json.name);
-                stmt.setString(3, json.motto != null ? json.motto : "");
-                stmt.setString(4, json.figure != null ? json.figure : "hd-180-1.ch-210-66.lg-270-110.sh-300-91");
-                stmt.setString(5, json.gender != null ? json.gender.toUpperCase() : "M");
-                stmt.setInt(6, json.x);
-                stmt.setInt(7, json.y);
-                stmt.setString(8, freeroamVal);
-                stmt.execute();
-
-                try (ResultSet keys = stmt.getGeneratedKeys()) {
-                    if (!keys.next()) {
-                        this.status = STATUS_ERROR;
-                        this.message = "Failed to insert bot into database";
-                        return;
+            try (Connection connection = Emulator.getDatabase().getDataSource().getConnection()) {
+                // Reuse existing bot record by name to avoid duplicates across sessions
+                int existingId = 0;
+                try (PreparedStatement check = connection.prepareStatement(
+                        "SELECT id FROM bots WHERE name = ? LIMIT 1")) {
+                    check.setString(1, json.name);
+                    try (ResultSet rs = check.executeQuery()) {
+                        if (rs.next()) existingId = rs.getInt(1);
                     }
-                    botId = keys.getInt(1);
+                }
+
+                if (existingId > 0) {
+                    try (PreparedStatement update = connection.prepareStatement(
+                            "UPDATE bots SET room_id=?, motto=?, figure=?, gender=?, x=?, y=?, z=0.0, rot=2, freeroam=?, chat_auto='0', chat_random='0', chat_delay=10 WHERE id=?")) {
+                        update.setInt(1, json.room_id);
+                        update.setString(2, json.motto != null ? json.motto : "");
+                        update.setString(3, json.figure != null ? json.figure : "hd-180-1.ch-210-66.lg-270-110.sh-300-91");
+                        update.setString(4, json.gender != null ? json.gender.toUpperCase() : "M");
+                        update.setInt(5, json.x);
+                        update.setInt(6, json.y);
+                        update.setString(7, freeroamVal);
+                        update.setInt(8, existingId);
+                        update.execute();
+                    }
+                    botId = existingId;
+                } else {
+                    try (PreparedStatement insert = connection.prepareStatement(
+                            "INSERT INTO bots (user_id, room_id, name, motto, figure, gender, x, y, z, rot, type, freeroam, chat_auto, chat_random, chat_delay) " +
+                            "VALUES (0, ?, ?, ?, ?, ?, ?, ?, 0.0, 2, 'generic', ?, '0', '0', 10)",
+                            Statement.RETURN_GENERATED_KEYS)) {
+                        insert.setInt(1, json.room_id);
+                        insert.setString(2, json.name);
+                        insert.setString(3, json.motto != null ? json.motto : "");
+                        insert.setString(4, json.figure != null ? json.figure : "hd-180-1.ch-210-66.lg-270-110.sh-300-91");
+                        insert.setString(5, json.gender != null ? json.gender.toUpperCase() : "M");
+                        insert.setInt(6, json.x);
+                        insert.setInt(7, json.y);
+                        insert.setString(8, freeroamVal);
+                        insert.execute();
+                        try (ResultSet keys = insert.getGeneratedKeys()) {
+                            if (!keys.next()) {
+                                this.status = STATUS_ERROR;
+                                this.message = "Failed to insert bot into database";
+                                return;
+                            }
+                            botId = keys.getInt(1);
+                        }
+                    }
                 }
             }
 
