@@ -66,6 +66,7 @@ public class RCONServer extends Server {
         this.addRCONMessage("talkbot", TalkBot.class);
         this.addRCONMessage("deploybot", DeployBot.class);
         this.addRCONMessage("deletebot", DeleteBot.class);
+        this.addRCONMessage("roomlivebots", RoomLiveBots.class);
         this.addRCONMessage("updatebotvisuals", UpdateBotVisuals.class);
 
         Collections.addAll(this.allowedAdresses, Emulator.getConfig().getValue("rcon.allowed", "127.0.0.1").split(";"));
