@@ -41,11 +41,9 @@ public class DeleteBot extends RCONMessage<DeleteBot.JSON> {
                 activeRoom.removeBot(activeBot);
             }
 
-            // Reset room_id to 0 rather than deleting the row so DeployBot can
-            // reuse the same record on the next session, preventing duplicates.
             int affectedRows;
             try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
-                 PreparedStatement statement = connection.prepareStatement("UPDATE bots SET room_id = 0 WHERE id = ? LIMIT 1")) {
+                 PreparedStatement statement = connection.prepareStatement("DELETE FROM bots WHERE id = ? LIMIT 1")) {
                 statement.setInt(1, json.bot_id);
                 affectedRows = statement.executeUpdate();
             }

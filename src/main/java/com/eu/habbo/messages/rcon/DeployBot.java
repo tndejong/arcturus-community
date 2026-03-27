@@ -107,29 +107,31 @@ public class DeployBot extends RCONMessage<DeployBot.JSON> {
                 return;
             }
 
-            // Set up room unit and inject into the live room
-            RoomTile tile = room.getLayout().getTile((short) json.x, (short) json.y);
-            if (tile == null) tile = room.getLayout().getDoorTile();
+            // Only inject into the live room if the bot is not already present there
+            if (room.getBot(botId) == null) {
+                RoomTile tile = room.getLayout().getTile((short) json.x, (short) json.y);
+                if (tile == null) tile = room.getLayout().getDoorTile();
 
-            RoomUnit roomUnit = new RoomUnit();
-            roomUnit.setRotation(RoomUserRotation.SOUTH);
-            roomUnit.setLocation(tile);
-            double stackHeight = tile.getStackHeight();
-            roomUnit.setPreviousLocationZ(stackHeight);
-            roomUnit.setZ(stackHeight);
-            roomUnit.setPathFinderRoom(room);
-            roomUnit.setRoomUnitType(RoomUnitType.BOT);
-            roomUnit.setCanWalk(canWalk);
+                RoomUnit roomUnit = new RoomUnit();
+                roomUnit.setRotation(RoomUserRotation.SOUTH);
+                roomUnit.setLocation(tile);
+                double stackHeight = tile.getStackHeight();
+                roomUnit.setPreviousLocationZ(stackHeight);
+                roomUnit.setZ(stackHeight);
+                roomUnit.setPathFinderRoom(room);
+                roomUnit.setRoomUnitType(RoomUnitType.BOT);
+                roomUnit.setCanWalk(canWalk);
 
-            bot.setRoomUnit(roomUnit);
-            bot.setRoom(room);
-            bot.setCanWalk(canWalk);
-            bot.needsUpdate(false);
+                bot.setRoomUnit(roomUnit);
+                bot.setRoom(room);
+                bot.setCanWalk(canWalk);
+                bot.needsUpdate(false);
 
-            room.addBot(bot);
-            Emulator.getThreading().run(bot);
-            room.sendComposer(new RoomUsersComposer(bot).compose());
-            room.sendComposer(new RoomUserStatusComposer(bot.getRoomUnit()).compose());
+                room.addBot(bot);
+                Emulator.getThreading().run(bot);
+                room.sendComposer(new RoomUsersComposer(bot).compose());
+                room.sendComposer(new RoomUserStatusComposer(bot.getRoomUnit()).compose());
+            }
 
             this.message = String.valueOf(botId);
         } catch (Exception e) {
