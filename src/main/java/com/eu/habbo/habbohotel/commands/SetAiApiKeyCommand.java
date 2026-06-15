@@ -23,12 +23,12 @@ public class SetAiApiKeyCommand extends Command {
     @Override
     public boolean handle(GameClient gameClient, String[] params) throws Exception {
         if (params.length < 2) {
-            gameClient.getHabbo().alert("Usage: :set_ai_key <api_key> [provider]\nExample: :set_ai_key sk-ant-... anthropic");
+            gameClient.getHabbo().alert("Usage: :set_ai_key <api_key>\nExample: :set_ai_key sk-ant-...");
             return false;
         }
 
         String apiKey = params[1];
-        String provider = params.length >= 3 ? params[2].toLowerCase() : "anthropic";
+        String provider = "anthropic";
         int userId = gameClient.getHabbo().getHabboInfo().getId();
 
         // Persist key to DB first (unverified) so the service can also read it

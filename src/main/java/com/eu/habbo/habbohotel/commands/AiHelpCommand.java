@@ -25,9 +25,9 @@ public class AiHelpCommand extends Command {
         sb.append("  Show this help message.\n\n");
 
         if (isAdmin) {
-            sb.append(":set_ai_key <api_key> [provider]\n");
-            sb.append("  Link your AI provider API key. Provider defaults to 'openai'.\n");
-            sb.append("  Example: :set_ai_key sk-... openai\n\n");
+            sb.append(":set_ai_key <api_key>\n");
+            sb.append("  Link your Anthropic API key for chat completion.\n");
+            sb.append("  Example: :set_ai_key sk-ant-...\n\n");
 
             sb.append(":setup_agent <name> [type:<figure_type>] [x:<tile_x> y:<tile_y>] <persona...>\n");
             sb.append("  Spawn an AI bot in your room with the given name and persona.\n");
