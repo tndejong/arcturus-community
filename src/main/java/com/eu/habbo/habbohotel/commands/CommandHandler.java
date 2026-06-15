@@ -302,6 +302,7 @@ public class CommandHandler {
         addCommand(new SetupAgentCommand());
         addCommand(new RemoveAgentCommand());
         addCommand(new AiDuetCommand());
+        addCommand(new AiNextCommand());
         addCommand(new AiStopCommand());
     }
 

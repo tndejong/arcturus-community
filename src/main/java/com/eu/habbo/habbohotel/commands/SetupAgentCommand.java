@@ -154,7 +154,7 @@ public class SetupAgentCommand extends Command {
         }
 
         // Deploy the AiBot using the DeployBot pattern (direct INSERT + loadBot + inject)
-        int botId = insertBot(userId, room.getId(), botName, persona, figure, spawnTile);
+        int botId = insertBot(userId, room.getId(), botName, figure, spawnTile);
         if (botId < 0) {
             gameClient.getHabbo().alert("Failed to create the agent bot. Please try again.");
             return false;
@@ -277,19 +277,18 @@ public class SetupAgentCommand extends Command {
                 && !room.hasHabbosAt(tile.x, tile.y);
     }
 
-    private int insertBot(int userId, int roomId, String name, String motto, String figure, RoomTile tile) {
+    private int insertBot(int userId, int roomId, String name, String figure, RoomTile tile) {
         try (Connection conn = Emulator.getDatabase().getDataSource().getConnection();
              PreparedStatement stmt = conn.prepareStatement(
                      "INSERT INTO bots (user_id, room_id, name, motto, figure, gender, x, y, z, rot, type, freeroam, chat_auto, chat_random, chat_delay) " +
-                     "VALUES (?, ?, ?, ?, ?, 'M', ?, ?, 0.0, 2, 'ai_agent', '0', '0', '0', 10)",
+                     "VALUES (?, ?, ?, '[AI] Agent', ?, 'M', ?, ?, 0.0, 2, 'ai_agent', '0', '0', '0', 10)",
                      Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, userId);
             stmt.setInt(2, roomId);
             stmt.setString(3, name);
-            stmt.setString(4, motto);
-            stmt.setString(5, figure);
-            stmt.setInt(6, tile.x);
-            stmt.setInt(7, tile.y);
+            stmt.setString(4, figure);
+            stmt.setInt(5, tile.x);
+            stmt.setInt(6, tile.y);
             stmt.execute();
             try (ResultSet keys = stmt.getGeneratedKeys()) {
                 if (keys.next()) return keys.getInt(1);
@@ -362,7 +361,7 @@ public class SetupAgentCommand extends Command {
     private ApiKeyRow loadApiKey(int userId) {
         try (Connection conn = Emulator.getDatabase().getDataSource().getConnection();
              PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT api_key, provider FROM ai_api_keys WHERE user_id = ? AND verified = 1 LIMIT 1")) {
+                     "SELECT api_key, provider FROM ai_api_keys WHERE user_id = ? AND provider = 'anthropic' AND verified = 1 LIMIT 1")) {
             stmt.setInt(1, userId);
             try (ResultSet set = stmt.executeQuery()) {
                 if (set.next()) {

@@ -59,6 +59,7 @@ public class AgentServiceClient {
                 "{\"bot_id\":%d,\"username\":\"%s\",\"message\":\"%s\"}",
                 botId, escapeJson(username), escapeJson(message)
         );
+        long t0 = System.currentTimeMillis();
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(baseUrl() + "/api/chat"))
@@ -69,14 +70,18 @@ public class AgentServiceClient {
 
             HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
 
+            long elapsed = System.currentTimeMillis() - t0;
             if (response.statusCode() == 200) {
-                return extractJsonField(response.body(), "response");
+                String reply = extractJsonField(response.body(), "response");
+                LOGGER.info("[TIMING] AgentServiceClient.chat bot={} ms={} replyLen={}", botId, elapsed, reply != null ? reply.length() : 0);
+                return reply;
             } else {
-                LOGGER.warn("habbo-ai-service /api/chat returned {}: {}", response.statusCode(), response.body());
+                LOGGER.warn("[TIMING] habbo-ai-service /api/chat bot={} ms={} status={} body={}", botId, elapsed, response.statusCode(), response.body());
                 return null;
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to call habbo-ai-service /api/chat for bot {}", botId, e);
+            long elapsed = System.currentTimeMillis() - t0;
+            LOGGER.error("[TIMING] Failed to call habbo-ai-service /api/chat for bot={} ms={}", botId, elapsed, e);
             return null;
         }
     }

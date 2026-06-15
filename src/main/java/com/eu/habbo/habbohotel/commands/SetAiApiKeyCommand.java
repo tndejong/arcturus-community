@@ -28,24 +28,31 @@ public class SetAiApiKeyCommand extends Command {
         }
 
         String apiKey = params[1];
-        String provider = "anthropic";
+        String provider = (params.length >= 3 && !params[2].isEmpty()) ? params[2] : "anthropic";
         int userId = gameClient.getHabbo().getHabboInfo().getId();
 
         // Persist key to DB first (unverified) so the service can also read it
         upsertApiKey(userId, apiKey, provider, false);
 
         // Validate with habbo-ai-service (blocking, but runs in command thread which is fine)
-        String error = AgentServiceClient.setApiKey(userId, apiKey, provider);
+        // Skip validation for ElevenLabs — just store the key
+        if (!provider.equals("elevenlabs")) {
+            String error = AgentServiceClient.setApiKey(userId, apiKey, provider);
 
-        if (error != null) {
-            gameClient.getHabbo().alert("API key verification failed: " + error);
-            return false;
+            if (error != null) {
+                gameClient.getHabbo().alert("API key verification failed: " + error);
+                return false;
+            }
         }
 
         // Mark as verified in DB
-        upsertApiKey(userId, apiKey, provider, true);
+        upsertApiKey(userId, apiKey, provider, provider.equals("elevenlabs") || true);
 
-        gameClient.getHabbo().alert("API key verified! Use :setup_agent <name> <persona> to create an AI agent bot.");
+        String responseMsg = provider.equals("elevenlabs")
+                ? "ElevenLabs API key saved! Bot messages will now be spoken aloud in the hotel."
+                : "API key verified! Use :setup_agent <name> <persona> to create an AI agent bot.";
+
+        gameClient.getHabbo().alert(responseMsg);
         return true;
     }
 

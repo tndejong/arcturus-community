@@ -28,7 +28,7 @@ public class AiModalGetSettingsEvent extends MessageHandler {
              PreparedStatement stmt = conn.prepareStatement(
                      "SELECT provider, api_key, verified " +
                              "FROM ai_api_keys " +
-                             "WHERE user_id = ? " +
+                             "WHERE user_id = ? AND provider = 'anthropic' " +
                              "ORDER BY updated_at DESC " +
                              "LIMIT 1")) {
             stmt.setInt(1, userId);
