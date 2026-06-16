@@ -17,7 +17,7 @@ import java.sql.SQLException;
 public class SetAiApiKeyCommand extends Command {
 
     public SetAiApiKeyCommand() {
-        super("cmd_set_ai_key", new String[]{"set_ai_key"});
+        super(null, new String[]{"set_ai_key"});
     }
 
     @Override

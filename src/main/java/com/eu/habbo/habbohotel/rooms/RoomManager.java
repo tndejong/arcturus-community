@@ -357,7 +357,7 @@ public class RoomManager {
                 final String persona = bot.getMotto();
 
                 try (PreparedStatement stmt = conn.prepareStatement(
-                        "SELECT api_key, provider FROM ai_api_keys WHERE user_id = ? AND verified = 1 LIMIT 1")) {
+                        "SELECT api_key, provider FROM ai_api_keys WHERE user_id = ? AND provider = 'anthropic' AND verified = 1 LIMIT 1")) {
                     stmt.setInt(1, userId);
                     try (ResultSet set = stmt.executeQuery()) {
                         if (!set.next()) {
