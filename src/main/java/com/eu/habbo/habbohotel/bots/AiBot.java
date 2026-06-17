@@ -18,6 +18,8 @@ import java.util.regex.Pattern;
  *
  * Also supports natural-language duet triggers:
  *   "<BotName>, chat with <OtherBot> about <topic>"
+ *   "<BotName> ask <OtherBot> how to ..."
+ *   "<BotName> tell <OtherBot> about <topic>"
  * and automatically stops any active duet when the owner talks to a bot directly.
  *
  * Conversation memory lives in habbo-ai-service (in-memory, resets on service
@@ -29,6 +31,19 @@ public class AiBot extends Bot {
     // Matches "chat/talk/conversation/discuss [anything] (with|to) <BotName> [about <topic>]"
     private static final Pattern DUET_TRIGGER = Pattern.compile(
         "(?:chat|talk|conversation|discuss)\\b.*?\\b(?:with|to)\\b\\s+(\\S+?)(?:\\s+about\\b\\s+(.+))?$",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    // Matches "ask/tell <BotName> [about] <topic>" — e.g. "ask Henk how to check in".
+    private static final Pattern ASK_TRIGGER = Pattern.compile(
+        "^(?:ask|tell)\\s+(\\S+?)(?:\\s+about)?\\s+(.+)$",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    // Optional greeting/filler allowed before the bot's name, so "Hey Henk ...",
+    // "Hi Henk ...", "Hallo Henk ..." are still recognised as addressing the bot.
+    private static final Pattern GREETING_PREFIX = Pattern.compile(
+        "^(?:hey|hi|hello|hellow|yo|hoi|hai|hallo|hej|hola|ok|oke|okay|so|well)\\b[,!\\s]+",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -54,26 +69,47 @@ public class AiBot extends Bot {
 
         String raw = message.getUnfilteredMessage().trim();
 
-        // Must be addressed by name: "<BotName> <message>" or "<BotName>, <message>"
+        // Allow an optional greeting before the name: "Hey Henk ...", "Hi Henk ..."
+        String addressed = GREETING_PREFIX.matcher(raw).replaceFirst("");
+
+        // Must be addressed by name: "<BotName> <message>" or "<BotName>, <message>".
+        // Require a word boundary after the name so "Henkie" doesn't trigger "Henk".
         String prefix = this.getName();
-        if (!raw.toLowerCase().startsWith(prefix.toLowerCase())) return;
+        if (!startsWithName(addressed, prefix)) return;
 
         // Strip the name prefix and optional punctuation/space
-        String text = raw.substring(prefix.length()).replaceFirst("^[,:\\s]+", "").trim();
+        String text = addressed.substring(prefix.length()).replaceFirst("^[,:\\s]+", "").trim();
         if (text.isEmpty()) return;
 
         Room room = message.getHabbo().getHabboInfo().getCurrentRoom();
         if (room == null) return;
 
-        // --- Natural-language duet trigger ---
-        // "Pieter, chat with Henk about sports" → starts a duet
+        // --- Natural-language duet triggers ---
+        // "Pieter, chat with Henk about sports" / "Pieter ask Henk how to check in" → starts a duet
+        String targetName = null;
+        String rawTopic = null;
+
         Matcher duetMatch = DUET_TRIGGER.matcher(text);
         if (duetMatch.find()) {
-            String targetName = duetMatch.group(1);
-            String topic = duetMatch.group(2) != null
-                ? duetMatch.group(2).trim().replaceAll("[?.!]+$", "").trim()
+            targetName = duetMatch.group(1);
+            rawTopic = duetMatch.group(2);
+        } else {
+            Matcher askMatch = ASK_TRIGGER.matcher(text);
+            if (askMatch.find()) {
+                targetName = askMatch.group(1);
+                rawTopic = askMatch.group(2);
+            }
+        }
+
+        if (targetName != null) {
+            // Trim trailing punctuation from the name (e.g. "Henk,")
+            targetName = targetName.replaceAll("[,:;.]+$", "").trim();
+
+            String topic = rawTopic != null
+                ? rawTopic.trim().replaceAll("[?.!]+$", "").trim()
                 : "general chat";
             if (topic.isEmpty()) topic = "general chat";
+
             String result = AiConversationManager.startConversation(room, ownerId,
                 message.getHabbo().getHabboInfo().getUsername(),
                 this.getName(), targetName, topic, 8);
@@ -100,5 +136,19 @@ public class AiBot extends Bot {
                 LOGGER.error("AiBot {} failed to get AI reply", botId, e);
             }
         });
+    }
+
+    /**
+     * True when {@code message} begins with {@code name} as a whole word —
+     * i.e. the name is either the entire message or is followed by a
+     * non-letter/digit character (space, comma, "?", etc.). This prevents
+     * names like "Henk" from matching unrelated words such as "Henkie".
+     */
+    private static boolean startsWithName(String message, String name) {
+        if (message == null || name == null || name.isEmpty()) return false;
+        if (message.length() < name.length()) return false;
+        if (!message.regionMatches(true, 0, name, 0, name.length())) return false;
+        if (message.length() == name.length()) return true;
+        return !Character.isLetterOrDigit(message.charAt(name.length()));
     }
 }

@@ -4,30 +4,22 @@ import com.eu.habbo.messages.ServerMessage;
 import com.eu.habbo.messages.outgoing.MessageComposer;
 import com.eu.habbo.messages.outgoing.Outgoing;
 
+/**
+ * Relays a short-lived portal bearer token to the Nitro client. The client uses
+ * it as an Authorization: Bearer credential for portal calls; no API keys are
+ * ever sent to the browser.
+ */
 public class AiModalSettingsComposer extends MessageComposer {
-    private final String provider;
-    private final String apiKey;
-    private final boolean verified;
-    private final String elevenlabsKey;
-    private final String elevenlabsVoiceId;
+    private final String hotelToken;
 
-    public AiModalSettingsComposer(String provider, String apiKey, boolean verified,
-                                    String elevenlabsKey, String elevenlabsVoiceId) {
-        this.provider = (provider == null) ? "" : provider;
-        this.apiKey = (apiKey == null) ? "" : apiKey;
-        this.verified = verified;
-        this.elevenlabsKey = (elevenlabsKey == null) ? "" : elevenlabsKey;
-        this.elevenlabsVoiceId = (elevenlabsVoiceId == null) ? "" : elevenlabsVoiceId;
+    public AiModalSettingsComposer(String hotelToken) {
+        this.hotelToken = (hotelToken == null) ? "" : hotelToken;
     }
 
     @Override
     protected ServerMessage composeInternal() {
         this.response.init(Outgoing.AiModalSettingsComposer);
-        this.response.appendString(this.provider);
-        this.response.appendString(this.apiKey);
-        this.response.appendBoolean(this.verified);
-        this.response.appendString(this.elevenlabsKey);
-        this.response.appendString(this.elevenlabsVoiceId);
+        this.response.appendString(this.hotelToken);
         return this.response;
     }
 }

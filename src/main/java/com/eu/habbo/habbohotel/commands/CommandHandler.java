@@ -298,8 +298,6 @@ public class CommandHandler {
         addCommand(new TestCommand());
 
         addCommand(new AiHelpCommand());
-        addCommand(new SetAiApiKeyCommand());
-        addCommand(new SetAiVoiceIdCommand());
         addCommand(new SetupAgentCommand());
         addCommand(new RemoveAgentCommand());
         addCommand(new AiDuetCommand());

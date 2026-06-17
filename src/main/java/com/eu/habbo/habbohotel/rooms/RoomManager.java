@@ -348,34 +348,23 @@ public class RoomManager {
     private void restoreAiAgents(Room room) {
         // Mark immediately so concurrent calls don't double-init
         this.aiRestoredRooms.add(room.getId());
-        try (Connection conn = Emulator.getDatabase().getDataSource().getConnection()) {
-            for (Bot bot : room.getCurrentBots().valueCollection()) {
-                if (!(bot instanceof AiBot)) continue;
+        for (Bot bot : room.getCurrentBots().valueCollection()) {
+            if (!(bot instanceof AiBot)) continue;
 
-                final int botId  = bot.getId();
-                final int userId = bot.getOwnerId();
-                final String persona = bot.getMotto();
+            final int botId  = bot.getId();
+            final int userId = bot.getOwnerId();
+            final String persona = bot.getMotto();
+            final String botName = bot.getName();
 
-                try (PreparedStatement stmt = conn.prepareStatement(
-                        "SELECT api_key, provider FROM ai_api_keys WHERE user_id = ? AND provider = 'anthropic' AND verified = 1 LIMIT 1")) {
-                    stmt.setInt(1, userId);
-                    try (ResultSet set = stmt.executeQuery()) {
-                        if (!set.next()) {
-                            LOGGER.warn("No verified API key for AiBot {} owner {}, skipping session init", botId, userId);
-                            continue;
-                        }
-                        final String apiKey   = set.getString("api_key");
-                        final String provider = set.getString("provider");
-
-                        Emulator.getThreading().run(() ->
-                            AgentServiceClient.initSession(botId, userId, persona, apiKey, provider)
-                        );
-                        LOGGER.info("Queued AI session restore for bot {} ({})", botId, bot.getName());
-                    }
+            // The AI service resolves the API key from the portal by user id.
+            Emulator.getThreading().run(() -> {
+                String error = AgentServiceClient.initSession(botId, userId, persona, "anthropic");
+                if (error != null) {
+                    LOGGER.warn("Failed to restore AI session for bot {} ({}): {}", botId, botName, error);
+                } else {
+                    LOGGER.info("Restored AI session for bot {} ({})", botId, botName);
                 }
-            }
-        } catch (SQLException e) {
-            LOGGER.error("Failed to restore AI agent sessions for room {}", room.getId(), e);
+            });
         }
     }
 

@@ -128,13 +128,6 @@ public class SetupAgentCommand extends Command {
         String persona = personaBuilder.toString();
         int userId = gameClient.getHabbo().getHabboInfo().getId();
 
-        // Look up the verified API key for this user
-        ApiKeyRow keyRow = loadApiKey(userId);
-        if (keyRow == null) {
-            gameClient.getHabbo().alert("No verified AI API key found. Run :set_ai_key <key> first.");
-            return false;
-        }
-
         RoomTile spawnTile;
         if (spawnX != null) {
             RoomTile requestedTile = room.getLayout().getTile(spawnX.shortValue(), spawnY.shortValue());
@@ -169,11 +162,11 @@ public class SetupAgentCommand extends Command {
         // Persist configuration so it auto-restores on server restart
         int configId = insertAgentConfig(userId, room.getId(), botName, persona, figure, spawnTile);
 
-        // Initialise the AI session in habbo-ai-service
-        String error = AgentServiceClient.initSession(botId, userId, persona, keyRow.apiKey, keyRow.provider);
+        // Initialise the AI session in habbo-ai-service (it resolves the API key from the portal).
+        String error = AgentServiceClient.initSession(botId, userId, persona, "anthropic");
         if (error != null) {
             LOGGER.warn("Failed to init AI session for bot {}: {}", botId, error);
-            gameClient.getHabbo().alert("Agent '" + botName + "' placed but AI service is unavailable: " + error);
+            gameClient.getHabbo().alert("Agent '" + botName + "' placed but AI session could not start: " + error);
             return false;
         }
 
@@ -358,28 +351,4 @@ public class SetupAgentCommand extends Command {
         return -1;
     }
 
-    private ApiKeyRow loadApiKey(int userId) {
-        try (Connection conn = Emulator.getDatabase().getDataSource().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT api_key, provider FROM ai_api_keys WHERE user_id = ? AND provider = 'anthropic' AND verified = 1 LIMIT 1")) {
-            stmt.setInt(1, userId);
-            try (ResultSet set = stmt.executeQuery()) {
-                if (set.next()) {
-                    return new ApiKeyRow(set.getString("api_key"), set.getString("provider"));
-                }
-            }
-        } catch (SQLException e) {
-            LOGGER.error("Failed to load API key for user {}", userId, e);
-        }
-        return null;
-    }
-
-    private static class ApiKeyRow {
-        final String apiKey;
-        final String provider;
-        ApiKeyRow(String apiKey, String provider) {
-            this.apiKey = apiKey;
-            this.provider = provider;
-        }
-    }
 }

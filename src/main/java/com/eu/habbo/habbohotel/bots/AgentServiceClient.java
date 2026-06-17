@@ -1,6 +1,8 @@
 package com.eu.habbo.habbohotel.bots;
 
 import com.eu.habbo.Emulator;
+import com.eu.habbo.habbohotel.ai.JsonUtil;
+import com.eu.habbo.habbohotel.ai.PortalClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,6 +15,9 @@ import java.time.Duration;
 /**
  * Thin HTTP client for talking to habbo-ai-service.
  * All methods are synchronous and must be called from a background thread.
+ *
+ * The AI service no longer receives API keys — it resolves them from the portal
+ * by habbo user id. These calls only carry the shared service secret.
  */
 public class AgentServiceClient {
     private static final Logger LOGGER = LoggerFactory.getLogger(AgentServiceClient.class);
@@ -27,25 +32,14 @@ public class AgentServiceClient {
     }
 
     /**
-     * Validates the given API key with habbo-ai-service and stores it in the DB.
+     * Initialises an in-memory agent session in habbo-ai-service. The service
+     * resolves the Anthropic key from the portal using the user id.
      * @return null on success, or an error message string on failure.
      */
-    public static String setApiKey(int userId, String apiKey, String provider) {
+    public static String initSession(int botId, int userId, String persona, String provider) {
         String body = String.format(
-                "{\"user_id\":%d,\"api_key\":\"%s\",\"provider\":\"%s\"}",
-                userId, escapeJson(apiKey), escapeJson(provider)
-        );
-        return post("/api/set-api-key", body);
-    }
-
-    /**
-     * Initialises an in-memory agent session in habbo-ai-service.
-     * @return null on success, or an error message string on failure.
-     */
-    public static String initSession(int botId, int userId, String persona, String apiKey, String provider) {
-        String body = String.format(
-                "{\"bot_id\":%d,\"user_id\":%d,\"persona\":\"%s\",\"api_key\":\"%s\",\"provider\":\"%s\"}",
-                botId, userId, escapeJson(persona), escapeJson(apiKey), escapeJson(provider)
+                "{\"bot_id\":%d,\"user_id\":%d,\"persona\":\"%s\",\"provider\":\"%s\"}",
+                botId, userId, JsonUtil.escape(persona), JsonUtil.escape(provider)
         );
         return post("/api/init-session", body);
     }
@@ -57,7 +51,7 @@ public class AgentServiceClient {
     public static String chat(int botId, String username, String message) {
         String body = String.format(
                 "{\"bot_id\":%d,\"username\":\"%s\",\"message\":\"%s\"}",
-                botId, escapeJson(username), escapeJson(message)
+                botId, JsonUtil.escape(username), JsonUtil.escape(message)
         );
         long t0 = System.currentTimeMillis();
         try {
@@ -65,6 +59,7 @@ public class AgentServiceClient {
                     .uri(URI.create(baseUrl() + "/api/chat"))
                     .timeout(TIMEOUT)
                     .header("Content-Type", "application/json")
+                    .header("X-Internal-Secret", PortalClient.secret())
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
@@ -72,7 +67,7 @@ public class AgentServiceClient {
 
             long elapsed = System.currentTimeMillis() - t0;
             if (response.statusCode() == 200) {
-                String reply = extractJsonField(response.body(), "response");
+                String reply = JsonUtil.extractField(response.body(), "response");
                 LOGGER.info("[TIMING] AgentServiceClient.chat bot={} ms={} replyLen={}", botId, elapsed, reply != null ? reply.length() : 0);
                 return reply;
             } else {
@@ -93,47 +88,22 @@ public class AgentServiceClient {
                     .uri(URI.create(baseUrl() + path))
                     .timeout(TIMEOUT)
                     .header("Content-Type", "application/json")
+                    .header("X-Internal-Secret", PortalClient.secret())
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                     .build();
 
             HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
-                String okField = extractJsonField(response.body(), "ok");
+                String okField = JsonUtil.extractField(response.body(), "ok");
                 if ("true".equals(okField)) return null;
             }
 
-            String errorField = extractJsonField(response.body(), "error");
+            String errorField = JsonUtil.extractField(response.body(), "error");
             return errorField != null ? errorField : "Unknown error (HTTP " + response.statusCode() + ")";
         } catch (Exception e) {
             LOGGER.error("Failed to call habbo-ai-service {}", path, e);
             return "Service unavailable: " + e.getMessage();
         }
-    }
-
-    /** Minimal JSON field extractor — avoids adding a JSON library dependency. */
-    private static String extractJsonField(String json, String field) {
-        String search = "\"" + field + "\":";
-        int idx = json.indexOf(search);
-        if (idx == -1) return null;
-        int start = idx + search.length();
-        if (start >= json.length()) return null;
-
-        char first = json.charAt(start);
-        if (first == '"') {
-            int end = json.indexOf('"', start + 1);
-            return end == -1 ? null : json.substring(start + 1, end);
-        } else {
-            int end = json.indexOf(',', start);
-            if (end == -1) end = json.indexOf('}', start);
-            return end == -1 ? json.substring(start) : json.substring(start, end).trim();
-        }
-    }
-
-    private static String escapeJson(String s) {
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
     }
 }

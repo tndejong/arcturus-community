@@ -1,16 +1,18 @@
 package com.eu.habbo.messages.incoming.users;
 
 import com.eu.habbo.Emulator;
+import com.eu.habbo.habbohotel.ai.PortalClient;
 import com.eu.habbo.messages.incoming.MessageHandler;
 import com.eu.habbo.messages.outgoing.users.AiModalSettingsComposer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-
+/**
+ * The Nitro client opens the AI modal and requests its settings. We mint a
+ * short-lived portal bearer token (the user is already authenticated via SSO)
+ * and relay it so the client can call portal endpoints (e.g. TTS) without ever
+ * handling raw API keys.
+ */
 public class AiModalGetSettingsEvent extends MessageHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(AiModalGetSettingsEvent.class);
 
@@ -18,44 +20,18 @@ public class AiModalGetSettingsEvent extends MessageHandler {
     public void handle() {
         if (this.client == null || this.client.getHabbo() == null) return;
 
-        int userId = this.client.getHabbo().getHabboInfo().getId();
+        final int userId = this.client.getHabbo().getHabboInfo().getId();
 
-        String provider = "anthropic";
-        String apiKey = "";
-        boolean verified = false;
-        String elevenlabsKey = "";
-        String elevenlabsVoiceId = "";
-
-        try (Connection conn = Emulator.getDatabase().getDataSource().getConnection()) {
-            // Load Anthropic key
-            try (PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT api_key, verified FROM ai_api_keys " +
-                            "WHERE user_id = ? AND provider = 'anthropic' LIMIT 1")) {
-                stmt.setInt(1, userId);
-                try (ResultSet set = stmt.executeQuery()) {
-                    if (set.next()) {
-                        apiKey = set.getString("api_key");
-                        verified = set.getInt("verified") == 1;
-                    }
-                }
+        // Network call to the portal — run off the client thread.
+        Emulator.getThreading().run(() -> {
+            String token = PortalClient.mintHotelToken(userId);
+            if (token == null || token.isEmpty()) {
+                LOGGER.warn("[AI] Failed to mint hotel token for user {} — TTS will fall back to browser speech. " +
+                        "Check portal.internal.secret matches the portal and that a portal user exists for this habbo id.", userId);
+            } else {
+                LOGGER.info("[AI] Minted hotel token for user {} (len={})", userId, token.length());
             }
-
-            // Load ElevenLabs key + voice ID
-            try (PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT api_key, voice_id FROM ai_api_keys " +
-                            "WHERE user_id = ? AND provider = 'elevenlabs' LIMIT 1")) {
-                stmt.setInt(1, userId);
-                try (ResultSet set = stmt.executeQuery()) {
-                    if (set.next()) {
-                        elevenlabsKey = set.getString("api_key");
-                        elevenlabsVoiceId = set.getString("voice_id");
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            LOGGER.error("Failed to load AI modal settings for user {}", userId, e);
-        }
-
-        this.client.sendResponse(new AiModalSettingsComposer(provider, apiKey, verified, elevenlabsKey, elevenlabsVoiceId));
+            this.client.sendResponse(new AiModalSettingsComposer(token == null ? "" : token));
+        });
     }
 }

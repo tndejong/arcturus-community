@@ -25,9 +25,7 @@ public class AiHelpCommand extends Command {
         sb.append("  Show this help message.\n\n");
 
         if (isAdmin) {
-            sb.append(":set_ai_key <api_key>\n");
-            sb.append("  Link your Anthropic API key for chat completion.\n");
-            sb.append("  Example: :set_ai_key sk-ant-...\n\n");
+            sb.append("API keys are managed in the portal (Settings → Voice & Audio).\n\n");
 
             sb.append(":setup_agent <name> [type:<figure_type>] [x:<tile_x> y:<tile_y>] <persona...>\n");
             sb.append("  Spawn an AI bot in your room with the given name and persona.\n");
@@ -49,7 +47,13 @@ public class AiHelpCommand extends Command {
         sb.append("=== Talking to an agent ===\n");
         sb.append("Address the bot by name at the start of your message:\n");
         sb.append("  Aria what can you do?\n");
-        sb.append("  Aria, tell me something fun!\n");
+        sb.append("  Aria, tell me something fun!\n\n");
+
+        sb.append("=== Start a bot-to-bot chat naturally ===\n");
+        sb.append("Address one bot and tell it to talk to another:\n");
+        sb.append("  Pieter, chat with Henk about football\n");
+        sb.append("  Pieter ask Henk how to check in at the hotel\n");
+        sb.append("  Pieter tell Henk about the weather\n");
 
         gameClient.getHabbo().alert(sb.toString());
         return true;
